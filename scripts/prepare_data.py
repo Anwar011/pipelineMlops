@@ -143,13 +143,13 @@ def main():
     # Créer la structure de dossiers
     create_directories(processed_dir)
     
-        # Mettre à jour le nombre de classes dans config si nécessaire
-        num_classes = len(class_mapping)
-        print(f"\n[SUCCES] Preparation terminee!")
-        print(f"   - {len(df_with_split)} images trouvees")
-        print(f"   - {num_classes} classes")
-        print(f"   - Metadata: {metadata_path}")
-        print(f"\n[NOTE] Mettez a jour 'num_classes' dans configs/config.yaml a {num_classes} si different")
+    # Mettre à jour le nombre de classes dans config si nécessaire
+    num_classes = len(class_mapping)
+    print(f"\n[SUCCES] Preparation terminee!")
+    print(f"   - {len(df_with_split)} images trouvees")
+    print(f"   - {num_classes} classes")
+    print(f"   - Metadata: {metadata_path}")
+    print(f"\n[NOTE] Mettez a jour 'num_classes' dans configs/config.yaml a {num_classes} si different")
 
 
 if __name__ == "__main__":
