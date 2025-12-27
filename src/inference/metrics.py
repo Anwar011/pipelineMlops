@@ -42,3 +42,4 @@ model_classes_total = Gauge(
     'Total number of classes in the model'
 )
 
+
