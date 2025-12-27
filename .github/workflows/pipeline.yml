@@ -82,26 +82,22 @@ jobs:
     
     - name: Check for data changes with DVC
       id: check_dvc
-      shell: cmd
       run: |
-        @echo off
-        setlocal enabledelayedexpansion
-        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
-        set "CHANGED=false"
         if "%{{ github.event_name }}"=="workflow_dispatch" (
-          set "CHANGED=true"
+          echo "changed=true" >> $env:GITHUB_OUTPUT
           echo Changements de donnees detectes ou trigger manuel
         ) else (
-          dvc status data/raw.dvc 2>nul | findstr /C:"data/raw.dvc" /C:"changed" >nul
-          if !ERRORLEVEL! EQU 0 (
-            set "CHANGED=true"
+          $env:Path += ";$env:USERPROFILE\.local\bin"
+          dvc status data/raw.dvc 2>$null | Select-String -Pattern "data/raw.dvc|changed" -Quiet
+          if ($LASTEXITCODE -eq 0) {
+            echo "changed=true" >> $env:GITHUB_OUTPUT
             echo Changements de donnees detectes
-          ) else (
+          } else {
+            echo "changed=false" >> $env:GITHUB_OUTPUT
             echo Pas de changements de donnees
-          )
+          }
         )
-        echo changed=!CHANGED! >> "%GITHUB_OUTPUT%"
-        exit /b 0
+      shell: pwsh
     
     - name: Prepare data
       if: steps.check_dvc.outputs.changed == 'true'
