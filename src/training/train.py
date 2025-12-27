@@ -223,7 +223,8 @@ def train(config_path):
                 print(f"[OK] Meilleur modele sauvegarde (Val Acc: {val_acc:.4f})")
                 
                 # Log le modèle dans MLflow (à chaque amélioration)
-                mlflow.pytorch.log_model(model, "model", registered_model_name=mlflow_config.get('model_name', 'plant_disease_model'))
+                # Ne pas utiliser registered_model_name car le Model Registry n'est pas activé
+                mlflow.pytorch.log_model(model, "model")
                 print(f"[OK] Modele enregistre dans MLflow (Val Acc: {val_acc:.4f})")
         
         print(f"\n[OK] Entrainement termine!")
@@ -240,14 +241,14 @@ def train(config_path):
             checkpoint = torch.load(best_model_path, map_location=device)
             model.load_state_dict(checkpoint['model_state_dict'])
             
-            # Enregistrer le modèle avec nom dans le registre
-            model_name = mlflow_config.get('model_name', 'plant_disease_model')
-            mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
+            # Enregistrer le modèle final dans MLflow
+            # Ne pas utiliser registered_model_name car le Model Registry n'est pas activé
+            mlflow.pytorch.log_model(model, "model")
             
             # Enregistrer aussi le checkpoint comme artifact
             mlflow.log_artifact(str(best_model_path), "checkpoint")
             
-            print(f"[OK] Modele final '{model_name}' enregistre dans MLflow avec succes!")
+            print(f"[OK] Modele final enregistre dans MLflow avec succes!")
         except Exception as e:
             print(f"[ATTENTION] Erreur lors de l'enregistrement final dans MLflow: {e}")
             print("Le modèle devrait avoir été enregistré pendant l'entraînement.")
