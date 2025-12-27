@@ -42,13 +42,13 @@ jobs:
         @echo off
         where python3 >nul 2>&1
         if %ERRORLEVEL% EQU 0 (
-          set PYTHON_CMD=python3
+          set "PYTHON_CMD=python3"
         ) else (
-          set PYTHON_CMD=python
+          set "PYTHON_CMD=python"
         )
         %PYTHON_CMD% -m pip install --upgrade pip --user
         %PYTHON_CMD% -m pip install -r requirements.txt --user
-        set PATH=%USERPROFILE%\.local\bin;%PATH%
+        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
     
     - name: Install DVC (if not available)
       shell: cmd
@@ -58,21 +58,21 @@ jobs:
         if %ERRORLEVEL% NEQ 0 (
           where python3 >nul 2>&1
           if %ERRORLEVEL% EQU 0 (
-            set PYTHON_CMD=python3
+            set "PYTHON_CMD=python3"
           ) else (
-            set PYTHON_CMD=python
+            set "PYTHON_CMD=python"
           )
-          %PYTHON_CMD% -m pip install dvc[s3] --user
-          set PATH=%USERPROFILE%\.local\bin;%PATH%
+          %PYTHON_CMD% -m pip install "dvc[s3]" --user
+          set "PATH=%USERPROFILE%\.local\bin;%PATH%"
         )
     
     - name: Setup DVC
       shell: cmd
       run: |
         @echo off
-        set PATH=%USERPROFILE%\.local\bin;%PATH%
-        dvc remote modify local --local url ./dvc_storage || echo Remote config failed
-        dvc pull || echo Pas de données DVC disponibles, continuons...
+        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
+        dvc remote modify local --local url ./dvc_storage 2>nul || echo Remote config failed
+        dvc pull 2>nul || echo Pas de données DVC disponibles, continuons...
     
     - name: Check for data changes with DVC
       id: check_dvc
@@ -100,13 +100,13 @@ jobs:
       shell: cmd
       run: |
         @echo off
-        set PYTHONPATH=.
-        set PATH=%USERPROFILE%\.local\bin;%PATH%
+        set "PYTHONPATH=."
+        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
         where python3 >nul 2>&1
         if %ERRORLEVEL% EQU 0 (
-          set PYTHON_CMD=python3
+          set "PYTHON_CMD=python3"
         ) else (
-          set PYTHON_CMD=python
+          set "PYTHON_CMD=python"
         )
         %PYTHON_CMD% scripts/prepare_data.py
     
@@ -129,13 +129,13 @@ jobs:
       shell: cmd
       run: |
         @echo off
-        set PYTHONPATH=.
-        set PATH=%USERPROFILE%\.local\bin;%PATH%
+        set "PYTHONPATH=."
+        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
         where python3 >nul 2>&1
         if %ERRORLEVEL% EQU 0 (
-          set PYTHON_CMD=python3
+          set "PYTHON_CMD=python3"
         ) else (
-          set PYTHON_CMD=python
+          set "PYTHON_CMD=python"
         )
         %PYTHON_CMD% src/training/train.py --config configs/config.yaml
     
@@ -144,13 +144,13 @@ jobs:
       shell: cmd
       run: |
         @echo off
-        set PYTHONPATH=.
-        set PATH=%USERPROFILE%\.local\bin;%PATH%
+        set "PYTHONPATH=."
+        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
         where python3 >nul 2>&1
         if %ERRORLEVEL% EQU 0 (
-          set PYTHON_CMD=python3
+          set "PYTHON_CMD=python3"
         ) else (
-          set PYTHON_CMD=python
+          set "PYTHON_CMD=python"
         )
         %PYTHON_CMD% scripts/verify_mlflow.py
     
@@ -159,13 +159,13 @@ jobs:
       shell: cmd
       run: |
         @echo off
-        set PYTHONPATH=.
-        set PATH=%USERPROFILE%\.local\bin;%PATH%
+        set "PYTHONPATH=."
+        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
         where python3 >nul 2>&1
         if %ERRORLEVEL% EQU 0 (
-          set PYTHON_CMD=python3
+          set "PYTHON_CMD=python3"
         ) else (
-          set PYTHON_CMD=python
+          set "PYTHON_CMD=python"
         )
         %PYTHON_CMD% scripts/get_latest_model.py --tracking-uri http://localhost:5000 --experiment-name plant_disease_mvp --output-file models/best_model.pth
     
