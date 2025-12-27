@@ -70,13 +70,32 @@ jobs:
       run: |
         @echo off
         set "PATH=%USERPROFILE%\.local\bin;%PATH%"
-        dvc remote modify local --local url ./dvc_storage 2>nul
+        dvc remote modify storage --local url .dvc/storage 2>nul
         if %ERRORLEVEL% NEQ 0 (
           echo Remote config failed, continuons...
         )
         dvc pull 2>nul
         if %ERRORLEVEL% NEQ 0 (
-          echo Pas de donnees DVC disponibles, continuons...
+          echo [INFO] Pas de donnees DVC disponibles dans le storage local
+          echo [INFO] Tentative de copie automatique des donnees...
+        )
+        exit /b 0
+    
+    - name: Copy data if needed (self-hosted runner)
+      shell: cmd
+      run: |
+        @echo off
+        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
+        set "PYTHONPATH=."
+        where python3 >nul 2>&1
+        if %ERRORLEVEL% EQU 0 (
+          python3 scripts/copy_data_if_needed.py
+        ) else (
+          python scripts/copy_data_if_needed.py
+        )
+        if %ERRORLEVEL% NEQ 0 (
+          echo [ATTENTION] Les donnees n'ont pas pu etre copiees automatiquement
+          echo [INFO] Assurez-vous que les donnees sont disponibles dans data/raw/PlantVillage
         )
         exit /b 0
     

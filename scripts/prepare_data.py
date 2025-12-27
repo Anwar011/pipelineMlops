@@ -133,6 +133,16 @@ def main():
     # Créer le répertoire pour metadata si nécessaire
     Path(metadata_path).parent.mkdir(parents=True, exist_ok=True)
     
+    # Vérifier que les données existent
+    raw_dir_path = Path(raw_dir)
+    if not raw_dir_path.exists():
+        print(f"[ERREUR] Le repertoire de donnees n'existe pas: {raw_dir}")
+        print(f"[INFO] Veuillez d'abord:")
+        print(f"   1. Telecharger les donnees")
+        print(f"   2. Les placer dans {raw_dir}")
+        print(f"   3. Ou utiliser DVC pour recuperer les donnees: dvc pull")
+        sys.exit(1)
+    
     # Créer metadata.csv
     df, class_mapping = create_metadata(raw_dir, metadata_path, config)
     
