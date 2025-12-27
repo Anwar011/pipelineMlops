@@ -85,20 +85,22 @@ jobs:
       shell: cmd
       run: |
         @echo off
+        setlocal enabledelayedexpansion
         set "PATH=%USERPROFILE%\.local\bin;%PATH%"
+        set "CHANGED=false"
         if "%{{ github.event_name }}"=="workflow_dispatch" (
-          echo changed=true >> "%GITHUB_OUTPUT%"
+          set "CHANGED=true"
           echo Changements de donnees detectes ou trigger manuel
-          exit /b 0
-        )
-        dvc status data/raw.dvc 2>nul | findstr /C:"data/raw.dvc" /C:"changed" >nul
-        if %ERRORLEVEL% EQU 0 (
-          echo changed=true >> "%GITHUB_OUTPUT%"
-          echo Changements de donnees detectes
         ) else (
-          echo changed=false >> "%GITHUB_OUTPUT%"
-          echo Pas de changements de donnees
+          dvc status data/raw.dvc 2>nul | findstr /C:"data/raw.dvc" /C:"changed" >nul
+          if !ERRORLEVEL! EQU 0 (
+            set "CHANGED=true"
+            echo Changements de donnees detectes
+          ) else (
+            echo Pas de changements de donnees
+          )
         )
+        echo changed=!CHANGED! >> "%GITHUB_OUTPUT%"
         exit /b 0
     
     - name: Prepare data
