@@ -19,27 +19,43 @@ jobs:
       uses: actions/checkout@v3
     
     - name: Setup Python (if not available)
+      shell: bash
       run: |
-        if ! command -v python3 &> /dev/null; then
+        if ! command -v python3 &> /dev/null && ! command -v python &> /dev/null; then
           echo "Python3 non trouvé, installation requise"
           exit 1
         fi
-        python3 --version
+        if command -v python3 &> /dev/null; then
+          python3 --version
+        else
+          python --version
+        fi
     
     - name: Install dependencies
+      shell: bash
       run: |
-        python3 -m pip install --upgrade pip --user
-        python3 -m pip install -r requirements.txt --user
+        PYTHON_CMD=python3
+        if ! command -v python3 &> /dev/null; then
+          PYTHON_CMD=python
+        fi
+        $PYTHON_CMD -m pip install --upgrade pip --user
+        $PYTHON_CMD -m pip install -r requirements.txt --user
         export PATH="$HOME/.local/bin:$PATH"
     
     - name: Install DVC (if not available)
+      shell: bash
       run: |
         if ! command -v dvc &> /dev/null; then
-          python3 -m pip install dvc[s3] --user
+          PYTHON_CMD=python3
+          if ! command -v python3 &> /dev/null; then
+            PYTHON_CMD=python
+          fi
+          $PYTHON_CMD -m pip install dvc[s3] --user
           export PATH="$HOME/.local/bin:$PATH"
         fi
     
     - name: Setup DVC
+      shell: bash
       run: |
         export PATH="$HOME/.local/bin:$PATH"
         dvc remote modify local --local url ./dvc_storage || true
@@ -47,6 +63,7 @@ jobs:
     
     - name: Check for data changes with DVC
       id: check_dvc
+      shell: bash
       run: |
         export PATH="$HOME/.local/bin:$PATH"
         if dvc status data/raw.dvc 2>/dev/null | grep -q "data/raw.dvc.*changed" || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
@@ -59,13 +76,19 @@ jobs:
     
     - name: Prepare data
       if: steps.check_dvc.outputs.changed == 'true'
+      shell: bash
       run: |
         export PYTHONPATH=.
         export PATH="$HOME/.local/bin:$PATH"
-        python3 scripts/prepare_data.py
+        PYTHON_CMD=python3
+        if ! command -v python3 &> /dev/null; then
+          PYTHON_CMD=python
+        fi
+        $PYTHON_CMD scripts/prepare_data.py
     
     - name: Start MLflow
       if: steps.check_dvc.outputs.changed == 'true'
+      shell: bash
       run: |
         cd docker
         docker-compose up -d mlflow
@@ -75,17 +98,27 @@ jobs:
     
     - name: Train model
       if: steps.check_dvc.outputs.changed == 'true'
+      shell: bash
       run: |
         export PYTHONPATH=.
         export PATH="$HOME/.local/bin:$PATH"
-        python3 src/training/train.py --config configs/config.yaml
+        PYTHON_CMD=python3
+        if ! command -v python3 &> /dev/null; then
+          PYTHON_CMD=python
+        fi
+        $PYTHON_CMD src/training/train.py --config configs/config.yaml
     
     - name: Verify model in MLflow
       if: steps.check_dvc.outputs.changed == 'true'
+      shell: bash
       run: |
         export PYTHONPATH=.
         export PATH="$HOME/.local/bin:$PATH"
-        python3 -c "
+        PYTHON_CMD=python3
+        if ! command -v python3 &> /dev/null; then
+          PYTHON_CMD=python
+        fi
+        $PYTHON_CMD -c "
         import mlflow
         mlflow.set_tracking_uri('http://localhost:5000')
         client = mlflow.tracking.MlflowClient()
@@ -111,16 +144,22 @@ jobs:
     
     - name: Get latest model from MLflow
       if: steps.check_dvc.outputs.changed == 'true'
+      shell: bash
       run: |
         export PYTHONPATH=.
         export PATH="$HOME/.local/bin:$PATH"
-        python3 scripts/get_latest_model.py \
+        PYTHON_CMD=python3
+        if ! command -v python3 &> /dev/null; then
+          PYTHON_CMD=python
+        fi
+        $PYTHON_CMD scripts/get_latest_model.py \
           --tracking-uri http://localhost:5000 \
           --experiment-name plant_disease_mvp \
           --output-file models/best_model.pth
     
     - name: Build Docker image
       if: steps.check_dvc.outputs.changed == 'true'
+      shell: bash
       run: |
         docker build -t plant-disease-api:${{ github.sha }} -f docker/Dockerfile .
         docker tag plant-disease-api:${{ github.sha }} plant-disease-api:latest
@@ -128,6 +167,7 @@ jobs:
     
     - name: Deploy to Kubernetes
       if: steps.check_dvc.outputs.changed == 'true'
+      shell: bash
       run: |
         # Vérifier que kubectl est disponible
         if ! command -v kubectl &> /dev/null; then
