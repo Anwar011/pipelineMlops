@@ -133,7 +133,27 @@ kubectl cluster-info
 kubectl get nodes
 ```
 
-### 4. Test Complet du Pipeline
+### 4. Démarrer les Services (Important!)
+
+Les services doivent être démarrés avant le pipeline :
+
+```bash
+# Démarrer MLflow, Prometheus, Grafana
+cd docker
+docker-compose up -d
+
+# Vérifier que MLflow est accessible
+curl http://localhost:5000/health
+
+# Services disponibles:
+# - MLflow: http://localhost:5000
+# - Prometheus: http://localhost:9090  
+# - Grafana: http://localhost:3000
+```
+
+**Note**: Le pipeline GitHub Actions vérifiera que MLflow est accessible mais ne le démarrera pas automatiquement.
+
+### 5. Test Complet du Pipeline
 
 ```bash
 # 1. Tester le build Docker
@@ -142,12 +162,7 @@ docker build -t plant-disease-api:test -f docker/Dockerfile .
 # 2. Tester kubectl
 kubectl apply -f k8s/namespace.yaml
 
-# 3. Tester MLflow
-cd docker
-docker-compose up -d mlflow
-curl http://localhost:5000/health
-
-# 4. Si tout fonctionne, le pipeline GitHub Actions devrait marcher !
+# 3. Si tout fonctionne, le pipeline GitHub Actions devrait marcher !
 ```
 
 ## 📝 Notes Importantes

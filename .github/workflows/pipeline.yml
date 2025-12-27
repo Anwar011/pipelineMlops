@@ -110,15 +110,19 @@ jobs:
         )
         %PYTHON_CMD% scripts/prepare_data.py
     
-    - name: Start MLflow
+    - name: Verify MLflow is running
       if: steps.check_dvc.outputs.changed == 'true'
       shell: cmd
       run: |
         @echo off
-        cd docker
-        docker-compose up -d mlflow
-        timeout /t 20 /nobreak
-        echo MLflow démarrage en cours...
+        echo Vérification que MLflow est accessible...
+        curl -f http://localhost:5000/health >nul 2>&1
+        if %ERRORLEVEL% NEQ 0 (
+          echo [ERREUR] MLflow n'est pas accessible sur http://localhost:5000
+          echo Veuillez démarrer MLflow avec: cd docker ^&^& docker-compose up -d mlflow
+          exit /b 1
+        )
+        echo [OK] MLflow est accessible
     
     - name: Train model
       if: steps.check_dvc.outputs.changed == 'true'

@@ -44,12 +44,23 @@ git add data/raw.dvc .gitignore
 git commit -m "Add data"
 ```
 
-### 2. Entraînement local
+### 2. Démarrer les services (MLflow, Prometheus, Grafana)
 
 ```bash
-# Démarrer MLflow
+# Démarrer tous les services en conteneurs
 cd docker
-docker-compose up -d mlflow
+docker-compose up -d
+
+# Services disponibles:
+# - MLflow: http://localhost:5000
+# - Prometheus: http://localhost:9090
+# - Grafana: http://localhost:3000
+```
+
+### 3. Entraînement local
+
+```bash
+# Assurez-vous que MLflow est accessible (voir étape 2)
 
 # Entraîner
 export PYTHONPATH=.
@@ -59,7 +70,7 @@ python src/training/train.py --config configs/config.yaml
 python scripts/get_latest_model.py
 ```
 
-### 3. API locale
+### 4. API locale
 
 ```bash
 # Option 1: Docker Compose
@@ -70,7 +81,7 @@ docker-compose up
 python scripts/run_api.py
 ```
 
-### 4. Déploiement Kubernetes
+### 5. Déploiement Kubernetes
 
 ```bash
 # Déployer l'API
