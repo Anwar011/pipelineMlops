@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: models-pvc
+  namespace: plant-disease-mlops
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard  # Ajuster selon votre cluster
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: class-mapping-config
+  namespace: plant-disease-mlops
+data:
+  class_mapping.yaml: |
+    # Ce fichier sera remplacé par le vrai contenu lors du déploiement
+    # Utilisez: kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops
+

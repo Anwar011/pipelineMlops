@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plant-disease-api
+  namespace: plant-disease-mlops
+  labels:
+    app: plant-disease-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: plant-disease-api
+  template:
+    metadata:
+      labels:
+        app: plant-disease-api
+        version: v1
+    spec:
+      containers:
+      - name: api
+        image: docker-api:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: API_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: api-config
+              key: API_HOST
+        - name: API_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: api-config
+              key: API_PORT
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: models
+          mountPath: /app/models
+        - name: class-mapping
+          mountPath: /app/data/class_mapping.yaml
+          subPath: class_mapping.yaml
+          readOnly: true
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+      - name: class-mapping
+        configMap:
+          name: class-mapping-config
+

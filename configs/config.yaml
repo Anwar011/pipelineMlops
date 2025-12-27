@@ -1,0 +1,26 @@
+data:
+  batch_size: 32
+  image_size: 224
+  metadata_path: data/metadata.csv
+  processed_dir: data/processed
+  raw_dir: data/raw/PlantVillage
+  test_split: 0.1
+  train_split: 0.7
+  val_split: 0.2
+inference:
+  device: cpu
+  model_path: models/best_model.pth
+mlflow:
+  experiment_name: plant_disease_mvp
+  model_name: plant_disease_model  # Nom pour le registre MLflow
+  tracking_uri: http://localhost:5000  # MLflow dans conteneur Docker
+  # tracking_uri: file:./mlruns  # Alternative: MLflow local (commenté)
+model:
+  name: resnet18
+  num_classes: 15
+  pretrained: true
+training:
+  device: cpu
+  learning_rate: 0.001
+  num_epochs: 10
+  save_dir: models

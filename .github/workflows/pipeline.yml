@@ -1,0 +1,149 @@
+name: MLOps Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'data/raw.dvc'
+      - '.dvc/**'
+      - 'data/raw/**'
+  workflow_dispatch:  # Trigger manuel pour tests
+
+jobs:
+  train-and-deploy:
+    runs-on: self-hosted  # Utiliser self-hosted runner
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Python (if not available)
+      run: |
+        if ! command -v python3 &> /dev/null; then
+          echo "Python3 non trouvé, installation requise"
+          exit 1
+        fi
+        python3 --version
+    
+    - name: Install dependencies
+      run: |
+        python3 -m pip install --upgrade pip --user
+        python3 -m pip install -r requirements.txt --user
+        export PATH="$HOME/.local/bin:$PATH"
+    
+    - name: Install DVC (if not available)
+      run: |
+        if ! command -v dvc &> /dev/null; then
+          python3 -m pip install dvc[s3] --user
+          export PATH="$HOME/.local/bin:$PATH"
+        fi
+    
+    - name: Setup DVC
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        dvc remote modify local --local url ./dvc_storage || true
+        dvc pull || echo "Pas de données DVC disponibles, continuons..."
+    
+    - name: Check for data changes with DVC
+      id: check_dvc
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        if dvc status data/raw.dvc 2>/dev/null | grep -q "data/raw.dvc.*changed" || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "📊 Changements de données détectés ou trigger manuel"
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+          echo "ℹ️ Pas de changements de données"
+        fi
+    
+    - name: Prepare data
+      if: steps.check_dvc.outputs.changed == 'true'
+      run: |
+        export PYTHONPATH=.
+        export PATH="$HOME/.local/bin:$PATH"
+        python3 scripts/prepare_data.py
+    
+    - name: Start MLflow
+      if: steps.check_dvc.outputs.changed == 'true'
+      run: |
+        cd docker
+        docker-compose up -d mlflow
+        sleep 20  # Attendre que MLflow soit prêt
+        # Vérifier que MLflow est accessible
+        timeout 60 bash -c 'until curl -f http://localhost:5000/health 2>/dev/null; do sleep 2; done' || echo "MLflow démarrage en cours..."
+    
+    - name: Train model
+      if: steps.check_dvc.outputs.changed == 'true'
+      run: |
+        export PYTHONPATH=.
+        export PATH="$HOME/.local/bin:$PATH"
+        python3 src/training/train.py --config configs/config.yaml
+    
+    - name: Verify model in MLflow
+      if: steps.check_dvc.outputs.changed == 'true'
+      run: |
+        export PYTHONPATH=.
+        export PATH="$HOME/.local/bin:$PATH"
+        python3 -c "
+        import mlflow
+        mlflow.set_tracking_uri('http://localhost:5000')
+        client = mlflow.tracking.MlflowClient()
+        exp = client.get_experiment_by_name('plant_disease_mvp')
+        if exp:
+            runs = client.search_runs([exp.experiment_id], order_by=['start_time DESC'], max_results=1)
+            if runs:
+                run_id = runs[0].info.run_id
+                print(f'[OK] Run trouvé: {run_id}')
+                artifacts = client.list_artifacts(run_id, 'model')
+                if artifacts:
+                    print('[OK] Modèle trouvé dans MLflow')
+                else:
+                    print('[ERREUR] Modèle non trouvé dans MLflow')
+                    exit(1)
+            else:
+                print('[ERREUR] Aucun run trouvé')
+                exit(1)
+        else:
+            print('[ERREUR] Expérience non trouvée')
+            exit(1)
+        "
+    
+    - name: Get latest model from MLflow
+      if: steps.check_dvc.outputs.changed == 'true'
+      run: |
+        export PYTHONPATH=.
+        export PATH="$HOME/.local/bin:$PATH"
+        python3 scripts/get_latest_model.py \
+          --tracking-uri http://localhost:5000 \
+          --experiment-name plant_disease_mvp \
+          --output-file models/best_model.pth
+    
+    - name: Build Docker image
+      if: steps.check_dvc.outputs.changed == 'true'
+      run: |
+        docker build -t plant-disease-api:${{ github.sha }} -f docker/Dockerfile .
+        docker tag plant-disease-api:${{ github.sha }} plant-disease-api:latest
+        echo "[OK] Image Docker buildée: plant-disease-api:${{ github.sha }}"
+    
+    - name: Deploy to Kubernetes
+      if: steps.check_dvc.outputs.changed == 'true'
+      run: |
+        # Vérifier que kubectl est disponible
+        if ! command -v kubectl &> /dev/null; then
+          echo "[ERREUR] kubectl n'est pas installé"
+          exit 1
+        fi
+        
+        # Appliquer les manifests Kubernetes
+        kubectl apply -f k8s/
+        
+        # Mettre à jour l'image du deployment
+        kubectl set image deployment/plant-disease-api \
+          api=plant-disease-api:${{ github.sha }} \
+          -n plant-disease-mlops || echo "Deployment non trouvé, création en cours..."
+        
+        # Attendre que le deployment soit prêt
+        kubectl rollout status deployment/plant-disease-api -n plant-disease-mlops --timeout=300s || true
+        
+        echo "[OK] Déploiement terminé"

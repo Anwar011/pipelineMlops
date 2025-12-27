@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: plant-disease-mlops
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - pvc.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+
+commonLabels:
+  app: plant-disease-mlops
+  managed-by: kustomize
+

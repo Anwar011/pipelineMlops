@@ -1,0 +1,11 @@
+# Patterns à ignorer pour DVC
+*.pyc
+__pycache__/
+*.log
+mlruns/
+models/*.pth
+.env
+*.tmp
+*.cache
+
+
