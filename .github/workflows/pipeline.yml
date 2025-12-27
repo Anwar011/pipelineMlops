@@ -83,21 +83,22 @@ jobs:
     - name: Check for data changes with DVC
       id: check_dvc
       run: |
-        if "%{{ github.event_name }}"=="workflow_dispatch" (
-          echo "changed=true" >> $env:GITHUB_OUTPUT
-          echo Changements de donnees detectes ou trigger manuel
-        ) else (
+        $changed = "false"
+        if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+          $changed = "true"
+          Write-Host "Changements de donnees detectes ou trigger manuel"
+        } else {
           $env:Path += ";$env:USERPROFILE\.local\bin"
-          dvc status data/raw.dvc 2>$null | Select-String -Pattern "data/raw.dvc|changed" -Quiet
-          if ($LASTEXITCODE -eq 0) {
-            echo "changed=true" >> $env:GITHUB_OUTPUT
-            echo Changements de donnees detectes
+          $result = dvc status data/raw.dvc 2>$null | Select-String -Pattern "data/raw.dvc|changed"
+          if ($result) {
+            $changed = "true"
+            Write-Host "Changements de donnees detectes"
           } else {
-            echo "changed=false" >> $env:GITHUB_OUTPUT
-            echo Pas de changements de donnees
+            Write-Host "Pas de changements de donnees"
           }
-        )
-      shell: pwsh
+        }
+        Add-Content -Path $env:GITHUB_OUTPUT -Value "changed=$changed"
+      shell: powershell
     
     - name: Prepare data
       if: steps.check_dvc.outputs.changed == 'true'
