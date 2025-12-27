@@ -70,29 +70,36 @@ jobs:
       run: |
         @echo off
         set "PATH=%USERPROFILE%\.local\bin;%PATH%"
-        dvc remote modify local --local url ./dvc_storage 2>nul || echo Remote config failed
-        dvc pull 2>nul || echo Pas de données DVC disponibles, continuons...
+        dvc remote modify local --local url ./dvc_storage 2>nul
+        if %ERRORLEVEL% NEQ 0 (
+          echo Remote config failed, continuons...
+        )
+        dvc pull 2>nul
+        if %ERRORLEVEL% NEQ 0 (
+          echo Pas de donnees DVC disponibles, continuons...
+        )
+        exit /b 0
     
     - name: Check for data changes with DVC
       id: check_dvc
       shell: cmd
       run: |
         @echo off
-        set PATH=%USERPROFILE%\.local\bin;%PATH%
+        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
         if "%{{ github.event_name }}"=="workflow_dispatch" (
           echo changed=true >> "%GITHUB_OUTPUT%"
-          echo Changements de données détectés ou trigger manuel
-          goto :end
+          echo Changements de donnees detectes ou trigger manuel
+          exit /b 0
         )
         dvc status data/raw.dvc 2>nul | findstr /C:"data/raw.dvc" /C:"changed" >nul
         if %ERRORLEVEL% EQU 0 (
           echo changed=true >> "%GITHUB_OUTPUT%"
-          echo Changements de données détectés ou trigger manuel
+          echo Changements de donnees detectes
         ) else (
           echo changed=false >> "%GITHUB_OUTPUT%"
-          echo Pas de changements de données
+          echo Pas de changements de donnees
         )
-        :end
+        exit /b 0
     
     - name: Prepare data
       if: steps.check_dvc.outputs.changed == 'true'
