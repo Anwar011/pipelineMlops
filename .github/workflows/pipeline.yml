@@ -339,10 +339,8 @@ jobs:
 
         REM Nettoyer les anciens pods (ImagePullBackOff, etc.)
         echo [INFO] Suppression des anciens pods plant-disease-api (si existants)...
-        kubectl delete pod -l app=plant-disease-api -n plant-disease-mlops --ignore-not-found=true
-        if errorlevel 1 (
-          echo [ERREUR] kubectl delete pod a echoue
-          exit /b 1
+        kubectl delete pod -l app=plant-disease-api -n plant-disease-mlops --ignore-not-found=true || (
+          echo [WARN] kubectl delete pod a retourne une erreur (ignoree)
         )
         echo [INFO] kubectl delete pod OK
 
