@@ -254,6 +254,9 @@ jobs:
           echo [ERREUR] kubectl n'est pas installé
           exit /b 1
         )
+
+        REM Fichier temporaire pour le ConfigMap (defini AVANT le bloc IF pour eviter les soucis d'expansion cmd)
+        set "CM_FILE=%TEMP%\class-mapping-config.yaml"
         
         echo [INFO] Deploiement des manifests Kubernetes...
         kubectl apply -f k8s/namespace.yaml
@@ -265,14 +268,14 @@ jobs:
         REM Creer/mettre a jour le ConfigMap class-mapping-config depuis le vrai fichier
         if exist "data\class_mapping.yaml" (
           echo [INFO] Creation du ConfigMap class-mapping-config depuis data\class_mapping.yaml
-          REM Sur Windows runners, le pipe peut parfois retourner un code != 0. On passe par un fichier temporaire.
-          set "CM_FILE=%RUNNER_TEMP%\class-mapping-config.yaml"
-          kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops --dry-run=client -o yaml > !CM_FILE!
+          echo [INFO] CM_FILE=%CM_FILE%
+          REM Sur Windows runners, le pipe peut retourner un code != 0. On passe par un fichier temporaire.
+          kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops --dry-run=client -o yaml > "%CM_FILE%"
           if %ERRORLEVEL% NEQ 0 (
             echo [ERREUR] Impossible de generer le manifest ConfigMap (class-mapping-config)
             exit /b 1
           )
-          kubectl apply -f !CM_FILE!
+          kubectl apply -f "%CM_FILE%"
           if %ERRORLEVEL% NEQ 0 (
             echo [ERREUR] Impossible d'appliquer le ConfigMap class-mapping-config
             exit /b 1
