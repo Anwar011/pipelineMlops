@@ -305,13 +305,14 @@ jobs:
             type "%CM_ERR%" 2>nul
             exit /b 1
           )
-
-          for %%A in ("%CM_FILE%") do set "CM_SIZE=%%~zA"
-          echo [INFO] CM_FILE size=%CM_SIZE% bytes
-          if "%CM_SIZE%"=="0" (
-            echo [ERREUR] YAML ConfigMap vide: %CM_FILE%
-            type "%CM_ERR%" 2>nul
-            exit /b 1
+ 
+          for %%A in ("%CM_FILE%") do (
+            echo [INFO] CM_FILE size=%%~zA bytes
+            if %%~zA==0 (
+              echo [ERREUR] YAML ConfigMap vide: %CM_FILE%
+              type "%CM_ERR%" 2>nul
+              exit /b 1
+            )
           )
 
           kubectl apply -f "%CM_FILE%" 2> "%CM_ERR%"
@@ -331,6 +332,8 @@ jobs:
           echo [ERREUR] data\class_mapping.yaml introuvable (necessaire pour class-mapping-config)
           exit /b 1
         )
+
+        echo [INFO] ConfigMap class-mapping-config OK, suite du deploiement...
 
         REM Nettoyer les anciens pods (ImagePullBackOff, etc.)
         echo [INFO] Suppression des anciens pods plant-disease-api (si existants)...
