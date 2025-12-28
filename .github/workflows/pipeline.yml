@@ -325,6 +325,7 @@ jobs:
             exit /b 1
           )
           echo [INFO] kubectl apply OK
+          cmd /c exit 0
 
           REM Nettoyer les fichiers generes (ne jamais faire echouer le step)
           if exist "%CM_ERR%" del /q "%CM_ERR%" >nul 2>nul
