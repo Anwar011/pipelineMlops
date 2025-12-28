@@ -214,9 +214,35 @@ jobs:
       run: |
         @echo off
         echo [INFO] Chargement de l'image Docker dans Minikube...
-        minikube image load plant-disease-api:${{ github.sha }} || echo Image deja chargee
-        minikube image load plant-disease-api:latest || echo Image deja chargee
-        echo [OK] Image chargee dans Minikube
+        
+        REM Chercher minikube dans le PATH ou dans les emplacements usuels
+        set MINIKUBE_CMD=
+        where minikube >nul 2>&1
+        if %ERRORLEVEL% EQU 0 (
+          set MINIKUBE_CMD=minikube
+        ) else (
+          REM Essayer les chemins usuels sur Windows
+          if exist "%USERPROFILE%\.minikube\bin\minikube.exe" (
+            set MINIKUBE_CMD=%USERPROFILE%\.minikube\bin\minikube.exe
+          ) else if exist "C:\minikube\minikube.exe" (
+            set MINIKUBE_CMD=C:\minikube\minikube.exe
+          )
+        )
+        
+        if "%MINIKUBE_CMD%"=="" (
+          echo [ATTENTION] Minikube non trouve dans le PATH
+          echo [INFO] Utilisation de docker tag pour pointer vers minikube
+          docker tag plant-disease-api:${{ github.sha }} plant-disease-api:latest
+          echo [OK] Image taggee comme latest (minikube utilisera cette image avec imagePullPolicy: Never)
+        ) else (
+          echo [INFO] Utilisation de %MINIKUBE_CMD% pour charger l'image
+          %MINIKUBE_CMD% image load plant-disease-api:${{ github.sha }} 2>nul || echo Image deja chargee
+          %MINIKUBE_CMD% image load plant-disease-api:latest 2>nul || echo Image deja chargee
+          echo [OK] Image chargee dans Minikube
+        )
+        
+        REM S'assurer que l'image latest existe
+        docker tag plant-disease-api:${{ github.sha }} plant-disease-api:latest
     
     - name: Deploy to Kubernetes
       shell: cmd
