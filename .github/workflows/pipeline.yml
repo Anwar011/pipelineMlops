@@ -209,6 +209,15 @@ jobs:
         docker tag plant-disease-api:${{ github.sha }} plant-disease-api:latest
         echo [OK] Image Docker buildée: plant-disease-api:${{ github.sha }}
     
+    - name: Load Docker image into Minikube
+      shell: cmd
+      run: |
+        @echo off
+        echo [INFO] Chargement de l'image Docker dans Minikube...
+        minikube image load plant-disease-api:${{ github.sha }} || echo Image deja chargee
+        minikube image load plant-disease-api:latest || echo Image deja chargee
+        echo [OK] Image chargee dans Minikube
+    
     - name: Deploy to Kubernetes
       shell: cmd
       run: |
@@ -219,10 +228,19 @@ jobs:
           exit /b 1
         )
         
-        kubectl apply -f k8s/
+        echo [INFO] Deploiement des manifests Kubernetes...
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/pvc.yaml
+        kubectl apply -f k8s/api-deployment.yaml
+        kubectl apply -f k8s/api-service.yaml
         
-        kubectl set image deployment/plant-disease-api api=plant-disease-api:${{ github.sha }} -n plant-disease-mlops || echo Deployment non trouvé, création en cours...
+        echo [INFO] Mise a jour de l'image du deployment...
+        kubectl set image deployment/plant-disease-api api=plant-disease-api:latest -n plant-disease-mlops || echo Deployment non trouvé, création en cours...
         
+        echo [INFO] Attente du rollout...
         kubectl rollout status deployment/plant-disease-api -n plant-disease-mlops --timeout=300s || echo Rollout timeout
         
         echo [OK] Déploiement terminé
+        echo [INFO] Status des pods:
+        kubectl get pods -n plant-disease-mlops

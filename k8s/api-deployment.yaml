@@ -18,8 +18,8 @@ spec:
     spec:
       containers:
       - name: api
-        image: docker-api:latest
-        imagePullPolicy: IfNotPresent
+        image: plant-disease-api:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8000
           name: http
