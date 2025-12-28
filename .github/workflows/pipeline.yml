@@ -249,6 +249,16 @@ jobs:
       run: |
         @echo off
         setlocal EnableExtensions EnableDelayedExpansion
+        REM Toujours se placer dans le workspace (evite les soucis de chemins/redirect)
+        if not defined GITHUB_WORKSPACE (
+          echo [ERREUR] GITHUB_WORKSPACE n'est pas defini
+          exit /b 1
+        )
+        cd /d "%GITHUB_WORKSPACE%"
+        if %ERRORLEVEL% NEQ 0 (
+          echo [ERREUR] Impossible de cd dans %GITHUB_WORKSPACE%
+          exit /b 1
+        )
         where kubectl >nul 2>&1
         if %ERRORLEVEL% NEQ 0 (
           echo [ERREUR] kubectl n'est pas installé
@@ -257,8 +267,8 @@ jobs:
 
         REM Fichier temporaire pour le ConfigMap (defini AVANT le bloc IF pour eviter les soucis d'expansion cmd)
         REM On ecrit dans le workspace (plus fiable que %TEMP% sur certains runners)
-        if not exist "%GITHUB_WORKSPACE%\k8s" mkdir "%GITHUB_WORKSPACE%\k8s"
-        set "CM_FILE=%GITHUB_WORKSPACE%\k8s\class-mapping-config.generated.yaml"
+        if not exist "k8s" mkdir "k8s"
+        set "CM_FILE=k8s\class-mapping-config.generated.yaml"
         
         echo [INFO] Deploiement des manifests Kubernetes...
         kubectl apply -f k8s/namespace.yaml
@@ -272,7 +282,7 @@ jobs:
           echo [INFO] Creation du ConfigMap class-mapping-config depuis data\class_mapping.yaml
           echo [INFO] CM_FILE=%CM_FILE%
           REM Sur Windows runners, le pipe peut retourner un code != 0. On passe par un fichier temporaire.
-          set "CM_ERR=%GITHUB_WORKSPACE%\k8s\class-mapping-config.generated.err.txt"
+          set "CM_ERR=k8s\class-mapping-config.generated.err.txt"
           del /q "%CM_ERR%" >nul 2>nul
           del /q "%CM_FILE%" >nul 2>nul
 
