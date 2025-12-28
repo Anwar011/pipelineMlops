@@ -317,15 +317,14 @@ jobs:
             )
           )
 
-          kubectl apply -f "%CM_FILE%" 2> "%CM_ERR%"
-          echo [INFO] kubectl apply done
-          if errorlevel 1 (
+          kubectl apply -f "%CM_FILE%" 2> "%CM_ERR%" || (
             echo [ERREUR] kubectl apply a echoue. Stderr:
             type "%CM_ERR%" 2>nul
             echo [INFO] Debut du YAML genere:
             more +1 "%CM_FILE%"
             exit /b 1
           )
+          echo [INFO] kubectl apply OK
 
           REM Nettoyer les fichiers generes (ne jamais faire echouer le step)
           if exist "%CM_ERR%" del /q "%CM_ERR%" >nul 2>nul
