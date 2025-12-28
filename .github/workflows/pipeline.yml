@@ -256,7 +256,9 @@ jobs:
         )
 
         REM Fichier temporaire pour le ConfigMap (defini AVANT le bloc IF pour eviter les soucis d'expansion cmd)
-        set "CM_FILE=%TEMP%\class-mapping-config.yaml"
+        REM On ecrit dans le workspace (plus fiable que %TEMP% sur certains runners)
+        if not exist "%GITHUB_WORKSPACE%\k8s" mkdir "%GITHUB_WORKSPACE%\k8s"
+        set "CM_FILE=%GITHUB_WORKSPACE%\k8s\class-mapping-config.generated.yaml"
         
         echo [INFO] Deploiement des manifests Kubernetes...
         kubectl apply -f k8s/namespace.yaml
@@ -270,9 +272,9 @@ jobs:
           echo [INFO] Creation du ConfigMap class-mapping-config depuis data\class_mapping.yaml
           echo [INFO] CM_FILE=%CM_FILE%
           REM Sur Windows runners, le pipe peut retourner un code != 0. On passe par un fichier temporaire.
-          set "CM_ERR=%TEMP%\class-mapping-config.err.txt"
-          del /q "%CM_ERR%" 2>nul
-          del /q "%CM_FILE%" 2>nul
+          set "CM_ERR=%GITHUB_WORKSPACE%\k8s\class-mapping-config.generated.err.txt"
+          del /q "%CM_ERR%" >nul 2>nul
+          del /q "%CM_FILE%" >nul 2>nul
 
           kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops --dry-run=client -o yaml > "%CM_FILE%" 2> "%CM_ERR%"
           echo [INFO] kubectl create exit=%ERRORLEVEL%
@@ -305,6 +307,10 @@ jobs:
             more +1 "%CM_FILE%"
             exit /b 1
           )
+
+          REM Nettoyer les fichiers generes
+          del /q "%CM_ERR%" >nul 2>nul
+          del /q "%CM_FILE%" >nul 2>nul
         ) else (
           echo [ERREUR] data\class_mapping.yaml introuvable (necessaire pour class-mapping-config)
           exit /b 1
