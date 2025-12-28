@@ -289,8 +289,8 @@ jobs:
           )
           dir "k8s" >nul 2>nul
           REM Sur Windows runners, le pipe peut retourner un code != 0. On passe par un fichier temporaire.
-          del /q "%CM_ERR%" >nul 2>nul
-          del /q "%CM_FILE%" >nul 2>nul
+          if exist "%CM_ERR%" del /q "%CM_ERR%" >nul 2>nul
+          if exist "%CM_FILE%" del /q "%CM_FILE%" >nul 2>nul
 
           kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops --dry-run=client -o yaml > "%CM_FILE%" 2> "%CM_ERR%"
           echo [INFO] kubectl create exit=%ERRORLEVEL%
@@ -324,9 +324,9 @@ jobs:
             exit /b 1
           )
 
-          REM Nettoyer les fichiers generes
-          del /q "%CM_ERR%" >nul 2>nul
-          del /q "%CM_FILE%" >nul 2>nul
+          REM Nettoyer les fichiers generes (ne jamais faire echouer le step)
+          if exist "%CM_ERR%" del /q "%CM_ERR%" >nul 2>nul
+          if exist "%CM_FILE%" del /q "%CM_FILE%" >nul 2>nul
         ) else (
           echo [ERREUR] data\class_mapping.yaml introuvable (necessaire pour class-mapping-config)
           exit /b 1
@@ -356,3 +356,4 @@ jobs:
         echo [OK] Déploiement terminé
         echo [INFO] Status des pods:
         kubectl get pods -n plant-disease-mlops
+        exit /b 0
