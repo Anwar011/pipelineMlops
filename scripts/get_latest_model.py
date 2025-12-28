@@ -4,7 +4,6 @@ Récupère le dernier modèle enregistré depuis MLflow.
 
 import sys
 import mlflow
-import mlflow.pytorch
 from pathlib import Path
 import torch
 
@@ -61,45 +60,52 @@ def get_latest_model(tracking_uri, experiment_name, output_file="models/best_mod
         # Chercher dans les artifacts disponibles
         artifacts = client.list_artifacts(run_id)
         
-        # Essayer d'abord le modèle enregistré comme artifact
-        model_found = False
+        print(f"[INFO] Artifacts disponibles dans le run:")
         for artifact in artifacts:
-            if artifact.path == "model/model.pth" or (artifact.path.startswith("model/") and artifact.path.endswith(".pth")):
-                artifact_uri = f"runs:/{run_id}/{artifact.path}"
+            print(f"       - {artifact.path}")
+        
+        # Essayer d'abord le modèle enregistré comme artifact (dossier model/)
+        # Utiliser download_artifacts directement avec le chemin complet pour éviter le Model Registry
+        model_found = False
+        
+        # Essayer model/model.pth directement
+        try:
+            artifact_uri = f"runs:/{run_id}/model/model.pth"
+            print(f"[INFO] Tentative de téléchargement de {artifact_uri}...")
+            checkpoint_path = mlflow.artifacts.download_artifacts(artifact_uri)
+            checkpoint = torch.load(checkpoint_path, map_location='cpu')
+            
+            if 'num_classes' in checkpoint:
+                num_classes = checkpoint['num_classes']
+            
+            sys.path.insert(0, str(Path(__file__).parent.parent))
+            from src.models.resnet import create_resnet18
+            model = create_resnet18(num_classes=num_classes, pretrained=False)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            model_found = True
+            print(f"[OK] Modèle chargé depuis model/model.pth")
+        except Exception as e:
+            print(f"[INFO] model/model.pth non trouvé: {e}")
+        
+        # Sinon, essayer checkpoint/best_model.pth
+        if not model_found:
+            try:
+                artifact_uri = f"runs:/{run_id}/checkpoint/best_model.pth"
+                print(f"[INFO] Tentative de téléchargement de {artifact_uri}...")
                 checkpoint_path = mlflow.artifacts.download_artifacts(artifact_uri)
                 checkpoint = torch.load(checkpoint_path, map_location='cpu')
                 
-                # Extraire num_classes du checkpoint si disponible
                 if 'num_classes' in checkpoint:
                     num_classes = checkpoint['num_classes']
                 
-                # Reconstruire le modèle
                 sys.path.insert(0, str(Path(__file__).parent.parent))
                 from src.models.resnet import create_resnet18
                 model = create_resnet18(num_classes=num_classes, pretrained=False)
                 model.load_state_dict(checkpoint['model_state_dict'])
                 model_found = True
-                print(f"[OK] Modèle chargé depuis artifact: {artifact.path}")
-                break
-        
-        # Sinon, essayer le checkpoint
-        if not model_found:
-            for artifact in artifacts:
-                if 'checkpoint' in artifact.path and 'best_model.pth' in artifact.path:
-                    artifact_uri = f"runs:/{run_id}/{artifact.path}"
-                    checkpoint_path = mlflow.artifacts.download_artifacts(artifact_uri)
-                    checkpoint = torch.load(checkpoint_path, map_location='cpu')
-                    
-                    if 'num_classes' in checkpoint:
-                        num_classes = checkpoint['num_classes']
-                    
-                    sys.path.insert(0, str(Path(__file__).parent.parent))
-                    from src.models.resnet import create_resnet18
-                    model = create_resnet18(num_classes=num_classes, pretrained=False)
-                    model.load_state_dict(checkpoint['model_state_dict'])
-                    model_found = True
-                    print(f"[OK] Modèle chargé depuis checkpoint: {artifact.path}")
-                    break
+                print(f"[OK] Modèle chargé depuis checkpoint/best_model.pth")
+            except Exception as e:
+                print(f"[INFO] checkpoint/best_model.pth non trouvé: {e}")
         
         if not model_found:
             raise Exception("Aucun modèle ou checkpoint trouvé dans les artifacts MLflow")

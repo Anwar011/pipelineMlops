@@ -225,6 +225,12 @@ def train(config_path):
                 # Log le modèle dans MLflow (à chaque amélioration)
                 # Enregistrer directement comme artifact (évite le Model Registry)
                 try:
+                    # Vérifier que le fichier checkpoint existe
+                    if not best_model_path.exists():
+                        print(f"[ERREUR] Le fichier {best_model_path} n'existe pas!")
+                        raise FileNotFoundError(f"Checkpoint file not found: {best_model_path}")
+                    
+                    # Sauvegarder aussi le modèle complet dans un fichier temporaire
                     import tempfile
                     with tempfile.TemporaryDirectory() as tmpdir:
                         # Sauvegarder le modèle PyTorch complet
@@ -236,15 +242,28 @@ def train(config_path):
                             'epoch': epoch
                         }, model_path)
                         
+                        # Vérifier que le fichier a été créé
+                        if not model_path.exists():
+                            raise FileNotFoundError(f"Model file not created: {model_path}")
+                        
+                        print(f"[INFO] Enregistrement du modele dans MLflow...")
+                        print(f"       Model path: {model_path} (exists: {model_path.exists()})")
+                        print(f"       Checkpoint path: {best_model_path} (exists: {best_model_path.exists()})")
+                        
                         # Enregistrer comme artifact dans MLflow
                         mlflow.log_artifact(str(model_path), "model")
+                        print(f"[OK] Model artifact logged: model/model.pth")
                         
                         # Enregistrer aussi le checkpoint pour compatibilité
                         mlflow.log_artifact(str(best_model_path), "checkpoint")
+                        print(f"[OK] Checkpoint artifact logged: checkpoint/best_model.pth")
                         
                     print(f"[OK] Modele enregistre dans MLflow (Val Acc: {val_acc:.4f})")
                 except Exception as e:
+                    import traceback
                     print(f"[ERREUR] Impossible d'enregistrer le modele dans MLflow: {e}")
+                    print(f"[DEBUG] Traceback:")
+                    traceback.print_exc()
                     print("[INFO] Le modele est sauvegarde localement dans models/best_model.pth")
         
         print(f"\n[OK] Entrainement termine!")
@@ -263,24 +282,33 @@ def train(config_path):
             
             # Enregistrer le modèle final dans MLflow (méthode directe sans Model Registry)
             try:
-                import tempfile
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    # Sauvegarder le modèle PyTorch complet
-                    model_path = Path(tmpdir) / "model.pth"
-                    torch.save({
-                        'model_state_dict': model.state_dict(),
-                        'num_classes': model_config['num_classes'],
-                        'val_acc': best_val_acc,
-                        'epoch': checkpoint.get('epoch', 0)
-                    }, model_path)
-                    
-                    # Enregistrer comme artifact dans MLflow
-                    mlflow.log_artifact(str(model_path), "model")
-                    mlflow.log_artifact(str(best_model_path), "checkpoint")
-                    
-                print(f"[OK] Modele final enregistre dans MLflow avec succes!")
+                # Vérifier que le fichier existe
+                if not best_model_path.exists():
+                    print(f"[ATTENTION] Le fichier {best_model_path} n'existe pas pour l'enregistrement final")
+                else:
+                    import tempfile
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        # Sauvegarder le modèle PyTorch complet
+                        model_path = Path(tmpdir) / "model.pth"
+                        torch.save({
+                            'model_state_dict': model.state_dict(),
+                            'num_classes': model_config['num_classes'],
+                            'val_acc': best_val_acc,
+                            'epoch': checkpoint.get('epoch', 0)
+                        }, model_path)
+                        
+                        print(f"[INFO] Enregistrement final du modele dans MLflow...")
+                        
+                        # Enregistrer comme artifact dans MLflow
+                        mlflow.log_artifact(str(model_path), "model")
+                        mlflow.log_artifact(str(best_model_path), "checkpoint")
+                        
+                    print(f"[OK] Modele final enregistre dans MLflow avec succes!")
+                    print(f"[INFO] Les artifacts seront visibles une fois le run termine.")
             except Exception as e:
+                import traceback
                 print(f"[ATTENTION] Erreur lors de l'enregistrement final dans MLflow: {e}")
+                traceback.print_exc()
                 print("Le modèle devrait avoir été enregistré pendant l'entraînement.")
             
         except Exception as e:
