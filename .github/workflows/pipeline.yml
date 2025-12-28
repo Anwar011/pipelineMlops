@@ -248,6 +248,7 @@ jobs:
       shell: cmd
       run: |
         @echo off
+        setlocal EnableExtensions EnableDelayedExpansion
         where kubectl >nul 2>&1
         if %ERRORLEVEL% NEQ 0 (
           echo [ERREUR] kubectl n'est pas installé
@@ -265,13 +266,13 @@ jobs:
         if exist "data\class_mapping.yaml" (
           echo [INFO] Creation du ConfigMap class-mapping-config depuis data\class_mapping.yaml
           REM Sur Windows runners, le pipe peut parfois retourner un code != 0. On passe par un fichier temporaire.
-          set CM_FILE=%RUNNER_TEMP%\class-mapping-config.yaml
-          kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops --dry-run=client -o yaml > %CM_FILE%
+          set "CM_FILE=%RUNNER_TEMP%\class-mapping-config.yaml"
+          kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops --dry-run=client -o yaml > !CM_FILE!
           if %ERRORLEVEL% NEQ 0 (
             echo [ERREUR] Impossible de generer le manifest ConfigMap (class-mapping-config)
             exit /b 1
           )
-          kubectl apply -f %CM_FILE%
+          kubectl apply -f !CM_FILE!
           if %ERRORLEVEL% NEQ 0 (
             echo [ERREUR] Impossible d'appliquer le ConfigMap class-mapping-config
             exit /b 1
