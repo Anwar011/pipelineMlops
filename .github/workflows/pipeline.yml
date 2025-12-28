@@ -257,7 +257,23 @@ jobs:
         echo [INFO] Deploiement des manifests Kubernetes...
         kubectl apply -f k8s/namespace.yaml
         kubectl apply -f k8s/configmap.yaml
-        kubectl apply -f k8s/pvc.yaml
+
+        REM (Optionnel) PVC non montee dans l'API en mode actuel, donc on ne l'applique pas ici
+        REM kubectl apply -f k8s/pvc.yaml
+
+        REM Creer/mettre a jour le ConfigMap class-mapping-config depuis le vrai fichier
+        if exist "data\class_mapping.yaml" (
+          echo [INFO] Creation du ConfigMap class-mapping-config depuis data\class_mapping.yaml
+          kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops --dry-run=client -o yaml | kubectl apply -f -
+        ) else (
+          echo [ERREUR] data\class_mapping.yaml introuvable (necessaire pour class-mapping-config)
+          exit /b 1
+        )
+
+        REM Nettoyer les anciens pods (ImagePullBackOff, etc.)
+        echo [INFO] Suppression des anciens pods plant-disease-api (si existants)...
+        kubectl delete pod -l app=plant-disease-api -n plant-disease-mlops --ignore-not-found=true
+
         kubectl apply -f k8s/api-deployment.yaml
         kubectl apply -f k8s/api-service.yaml
         
@@ -265,7 +281,15 @@ jobs:
         kubectl set image deployment/plant-disease-api api=plant-disease-api:latest -n plant-disease-mlops || echo Deployment non trouvé, création en cours...
         
         echo [INFO] Attente du rollout...
-        kubectl rollout status deployment/plant-disease-api -n plant-disease-mlops --timeout=300s || echo Rollout timeout
+        kubectl rollout status deployment/plant-disease-api -n plant-disease-mlops --timeout=300s
+        if %ERRORLEVEL% NEQ 0 (
+          echo [ERREUR] Rollout failed / timeout. Diagnostic:
+          kubectl get pods -n plant-disease-mlops
+          kubectl describe deployment/plant-disease-api -n plant-disease-mlops
+          echo [INFO] Logs (last 200 lines):
+          kubectl logs deployment/plant-disease-api -n plant-disease-mlops --tail=200 --all-containers=true
+          exit /b 1
+        )
         
         echo [OK] Déploiement terminé
         echo [INFO] Status des pods:

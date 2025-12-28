@@ -19,7 +19,7 @@ spec:
       containers:
       - name: api
         image: plant-disease-api:latest
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
           name: http
@@ -59,16 +59,11 @@ spec:
           timeoutSeconds: 3
           failureThreshold: 3
         volumeMounts:
-        - name: models
-          mountPath: /app/models
         - name: class-mapping
           mountPath: /app/data/class_mapping.yaml
           subPath: class_mapping.yaml
           readOnly: true
       volumes:
-      - name: models
-        persistentVolumeClaim:
-          claimName: models-pvc
       - name: class-mapping
         configMap:
           name: class-mapping-config
