@@ -338,12 +338,35 @@ jobs:
         REM Nettoyer les anciens pods (ImagePullBackOff, etc.)
         echo [INFO] Suppression des anciens pods plant-disease-api (si existants)...
         kubectl delete pod -l app=plant-disease-api -n plant-disease-mlops --ignore-not-found=true
+        if errorlevel 1 (
+          echo [ERREUR] kubectl delete pod a echoue
+          exit /b 1
+        )
+        echo [INFO] kubectl delete pod OK
 
         kubectl apply -f k8s/api-deployment.yaml
+        if errorlevel 1 (
+          echo [ERREUR] kubectl apply deployment a echoue
+          kubectl describe deployment/plant-disease-api -n plant-disease-mlops
+          exit /b 1
+        )
+        echo [INFO] kubectl apply deployment OK
+
         kubectl apply -f k8s/api-service.yaml
+        if errorlevel 1 (
+          echo [ERREUR] kubectl apply service a echoue
+          kubectl describe service/api-service -n plant-disease-mlops
+          exit /b 1
+        )
+        echo [INFO] kubectl apply service OK
         
         echo [INFO] Mise a jour de l'image du deployment...
         kubectl set image deployment/plant-disease-api api=plant-disease-api:latest -n plant-disease-mlops || echo Deployment non trouvé, création en cours...
+        if errorlevel 1 (
+          echo [ERREUR] kubectl set image a echoue
+          exit /b 1
+        )
+        echo [INFO] kubectl set image OK
         
         echo [INFO] Attente du rollout...
         kubectl rollout status deployment/plant-disease-api -n plant-disease-mlops --timeout=300s
