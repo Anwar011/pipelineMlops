@@ -281,6 +281,12 @@ jobs:
         if exist "data\class_mapping.yaml" (
           echo [INFO] Creation du ConfigMap class-mapping-config depuis data\class_mapping.yaml
           echo [INFO] CM_FILE=%CM_FILE%
+          echo [INFO] CWD=%CD%
+          if not exist "k8s" (
+            echo [INFO] Dossier k8s manquant, creation...
+            mkdir "k8s"
+          )
+          dir "k8s" >nul 2>nul
           REM Sur Windows runners, le pipe peut retourner un code != 0. On passe par un fichier temporaire.
           set "CM_ERR=k8s\class-mapping-config.generated.err.txt"
           del /q "%CM_ERR%" >nul 2>nul
