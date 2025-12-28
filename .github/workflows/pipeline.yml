@@ -115,64 +115,56 @@ jobs:
         )
         exit /b 0
     
-    # ============================================================================
-    # ETAPES D'ENTRAINEMENT (COMMENTEES POUR TEST RAPIDE - UTILISE MODELE EXISTANT)
-    # ============================================================================
-    # - name: Prepare data
-    #   if: steps.check_dvc.outputs.changed == 'true'
-    #   shell: cmd
-    #   run: |
-    #     @echo off
-    #     set "PYTHONPATH=."
-    #     set "PATH=%USERPROFILE%\.local\bin;%PATH%"
-    #     where python3 >nul 2>&1
-    #     if %ERRORLEVEL% EQU 0 (
-    #       python3 scripts/prepare_data.py
-    #     ) else (
-    #       python scripts/prepare_data.py
-    #     )
-    # 
-    # - name: Verify MLflow is running
-    #   if: steps.check_dvc.outputs.changed == 'true'
-    #   shell: cmd
-    #   run: |
-    #     @echo off
-    #     echo Vérification que MLflow est accessible...
-    #     curl -f http://localhost:5000/health >nul 2>&1
-    #     if %ERRORLEVEL% NEQ 0 (
-    #       echo [ERREUR] MLflow n'est pas accessible sur http://localhost:5000
-    #       echo Veuillez démarrer MLflow avec: cd docker ^&^& docker-compose up -d mlflow
-    #       exit /b 1
-    #     )
-    #     echo [OK] MLflow est accessible
-    # 
-    # - name: Train model
-    #   if: steps.check_dvc.outputs.changed == 'true'
-    #   shell: cmd
-    #   run: |
-    #     @echo off
-    #     set "PYTHONPATH=."
-    #     set "PATH=%USERPROFILE%\.local\bin;%PATH%"
-    #     where python3 >nul 2>&1
-    #     if %ERRORLEVEL% EQU 0 (
-    #       python3 src/training/train.py --config configs/config.yaml
-    #     ) else (
-    #       python src/training/train.py --config configs/config.yaml
-    #     )
-    # 
-    # - name: Verify model in MLflow
-    #   if: steps.check_dvc.outputs.changed == 'true'
-    #   shell: cmd
-    #   run: |
-    #     @echo off
-    #     set "PYTHONPATH=."
-    #     set "PATH=%USERPROFILE%\.local\bin;%PATH%"
-    #     where python3 >nul 2>&1
-    #     if %ERRORLEVEL% EQU 0 (
-    #       python3 scripts/verify_mlflow.py
-    #     ) else (
-    #       python scripts/verify_mlflow.py
-    #     )
+    - name: Prepare data
+      if: steps.check_dvc.outputs.changed == 'true'
+      shell: cmd
+      run: |
+        @echo off
+        set "PYTHONPATH=."
+        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
+        where python3 >nul 2>&1
+        if %ERRORLEVEL% EQU 0 (
+          python3 scripts/prepare_data.py
+        ) else (
+          python scripts/prepare_data.py
+        )
+ 
+    - name: Verify MLflow is running (for training)
+      if: steps.check_dvc.outputs.changed == 'true'
+      shell: cmd
+      run: |
+        @echo off
+        echo Vérification que MLflow est accessible...
+        curl -f http://localhost:5000/health >nul 2>&1
+        if %ERRORLEVEL% NEQ 0 (
+          echo [ERREUR] MLflow n'est pas accessible sur http://localhost:5000
+          echo Veuillez démarrer MLflow avec: cd docker ^&^& docker-compose up -d mlflow
+          exit /b 1
+        )
+        echo [OK] MLflow est accessible
+ 
+    - name: Train model
+      if: steps.check_dvc.outputs.changed == 'true'
+      shell: cmd
+      run: |
+        @echo off
+        echo [INFO] Phase entrainement presente mais SKIP (test pipeline rapide)
+        echo [INFO] Aucun entrainement lance, on conserve le dernier modele MLflow
+        exit /b 0
+ 
+    - name: Verify model in MLflow
+      if: steps.check_dvc.outputs.changed == 'true'
+      shell: cmd
+      run: |
+        @echo off
+        set "PYTHONPATH=."
+        set "PATH=%USERPROFILE%\.local\bin;%PATH%"
+        where python3 >nul 2>&1
+        if %ERRORLEVEL% EQU 0 (
+          python3 scripts/verify_mlflow.py
+        ) else (
+          python scripts/verify_mlflow.py
+        )
     
     - name: Verify MLflow is running
       shell: cmd
