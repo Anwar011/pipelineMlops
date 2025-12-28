@@ -265,10 +265,11 @@ jobs:
           exit /b 1
         )
 
-        REM Fichier temporaire pour le ConfigMap (defini AVANT le bloc IF pour eviter les soucis d'expansion cmd)
+        REM Fichiers temporaires pour le ConfigMap (definis AVANT le bloc IF pour eviter les soucis d'expansion cmd)
         REM On ecrit dans le workspace (plus fiable que %TEMP% sur certains runners)
         if not exist "k8s" mkdir "k8s"
         set "CM_FILE=k8s\class-mapping-config.generated.yaml"
+        set "CM_ERR=k8s\class-mapping-config.generated.err.txt"
         
         echo [INFO] Deploiement des manifests Kubernetes...
         kubectl apply -f k8s/namespace.yaml
@@ -288,7 +289,6 @@ jobs:
           )
           dir "k8s" >nul 2>nul
           REM Sur Windows runners, le pipe peut retourner un code != 0. On passe par un fichier temporaire.
-          set "CM_ERR=k8s\class-mapping-config.generated.err.txt"
           del /q "%CM_ERR%" >nul 2>nul
           del /q "%CM_FILE%" >nul 2>nul
 
