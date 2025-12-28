@@ -47,12 +47,9 @@ def get_latest_model(tracking_uri, experiment_name, output_file="models/best_mod
     print(f"     Date: {latest_run.info.start_time}")
     print(f"     Val Accuracy: {latest_run.data.metrics.get('val_accuracy', 'N/A')}")
     
-    # URI du modèle dans MLflow
-    model_uri = f"runs:/{run_id}/model"
+    print(f"[OK] Recherche du modèle dans les artifacts MLflow...")
     
-    print(f"[OK] Téléchargement du modèle depuis MLflow...")
-    
-    # Charger le modèle PyTorch depuis MLflow
+    # Charger le modèle depuis les artifacts (méthode directe sans Model Registry)
     model = None
     num_classes = latest_run.data.params.get('num_classes', 15)
     try:
@@ -61,76 +58,68 @@ def get_latest_model(tracking_uri, experiment_name, output_file="models/best_mod
         num_classes = 15
     
     try:
-        # Essayer de charger depuis le modèle enregistré
-        model = mlflow.pytorch.load_model(model_uri)
-        print(f"[OK] Modèle chargé depuis MLflow")
-    except Exception as e:
-        # Si le modèle n'est pas disponible, essayer de charger depuis le checkpoint artifact
-        print(f"[INFO] Modèle principal non disponible ({e}), tentative depuis checkpoint...")
-        checkpoint_uri = f"runs:/{run_id}/checkpoint/best_model.pth"
-        try:
-            # Télécharger le checkpoint
-            checkpoint_path = mlflow.artifacts.download_artifacts(checkpoint_uri)
-            # Charger le checkpoint directement
-            checkpoint = torch.load(checkpoint_path, map_location='cpu')
-            # Extraire num_classes du checkpoint si disponible
-            if 'num_classes' in checkpoint:
-                num_classes = checkpoint['num_classes']
-            # Reconstruire le modèle
-            import sys
-            from pathlib import Path
-            # Ajouter le répertoire parent au path pour les imports
-            sys.path.insert(0, str(Path(__file__).parent.parent))
-            from src.models.resnet import create_resnet18
-            model = create_resnet18(num_classes=num_classes, pretrained=False)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            print(f"[OK] Modèle chargé depuis checkpoint artifact")
-        except Exception as e2:
-            # Dernier recours: chercher dans tous les artifacts
-            print(f"[INFO] Tentative depuis les artifacts disponibles...")
-            try:
-                artifacts = client.list_artifacts(run_id)
-                checkpoint_found = False
-                for artifact in artifacts:
-                    if 'best_model.pth' in artifact.path or 'checkpoint' in artifact.path:
-                        artifact_uri = f"runs:/{run_id}/{artifact.path}"
-                        checkpoint_path = mlflow.artifacts.download_artifacts(artifact_uri)
-                        checkpoint = torch.load(checkpoint_path, map_location='cpu')
-                        if 'num_classes' in checkpoint:
-                            num_classes = checkpoint['num_classes']
-                        import sys
-                        from pathlib import Path
-                        sys.path.insert(0, str(Path(__file__).parent.parent))
-                        from src.models.resnet import create_resnet18
-                        model = create_resnet18(num_classes=num_classes, pretrained=False)
-                        model.load_state_dict(checkpoint['model_state_dict'])
-                        checkpoint_found = True
-                        print(f"[OK] Modèle chargé depuis artifact: {artifact.path}")
-                        break
-                if not checkpoint_found:
-                    raise Exception(f"Impossible de trouver un checkpoint. Erreurs: {e}, {e2}")
-            except Exception as e3:
-                raise Exception(f"Impossible de charger le modèle depuis MLflow. Erreurs: {e}, {e2}, {e3}")
+        # Chercher dans les artifacts disponibles
+        artifacts = client.list_artifacts(run_id)
         
-    if model is None:
-        raise Exception("Impossible de charger le modèle depuis MLflow")
-    
-    # Sauvegarder le modèle au format PyTorch standard
-    output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Récupérer val_acc depuis les métriques
-    val_acc = float(latest_run.data.metrics.get('val_accuracy', 0.0))
-    
-    # Sauvegarder le checkpoint PyTorch (format compatible avec predictor.py)
-    checkpoint = {
-        'model_state_dict': model.state_dict(),
-        'num_classes': num_classes,
-        'val_acc': val_acc,
-        'epoch': latest_run.data.metrics.get('epoch', 0)
-    }
-    
-    torch.save(checkpoint, output_path)
+        # Essayer d'abord le modèle enregistré comme artifact
+        model_found = False
+        for artifact in artifacts:
+            if artifact.path == "model/model.pth" or (artifact.path.startswith("model/") and artifact.path.endswith(".pth")):
+                artifact_uri = f"runs:/{run_id}/{artifact.path}"
+                checkpoint_path = mlflow.artifacts.download_artifacts(artifact_uri)
+                checkpoint = torch.load(checkpoint_path, map_location='cpu')
+                
+                # Extraire num_classes du checkpoint si disponible
+                if 'num_classes' in checkpoint:
+                    num_classes = checkpoint['num_classes']
+                
+                # Reconstruire le modèle
+                sys.path.insert(0, str(Path(__file__).parent.parent))
+                from src.models.resnet import create_resnet18
+                model = create_resnet18(num_classes=num_classes, pretrained=False)
+                model.load_state_dict(checkpoint['model_state_dict'])
+                model_found = True
+                print(f"[OK] Modèle chargé depuis artifact: {artifact.path}")
+                break
+        
+        # Sinon, essayer le checkpoint
+        if not model_found:
+            for artifact in artifacts:
+                if 'checkpoint' in artifact.path and 'best_model.pth' in artifact.path:
+                    artifact_uri = f"runs:/{run_id}/{artifact.path}"
+                    checkpoint_path = mlflow.artifacts.download_artifacts(artifact_uri)
+                    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+                    
+                    if 'num_classes' in checkpoint:
+                        num_classes = checkpoint['num_classes']
+                    
+                    sys.path.insert(0, str(Path(__file__).parent.parent))
+                    from src.models.resnet import create_resnet18
+                    model = create_resnet18(num_classes=num_classes, pretrained=False)
+                    model.load_state_dict(checkpoint['model_state_dict'])
+                    model_found = True
+                    print(f"[OK] Modèle chargé depuis checkpoint: {artifact.path}")
+                    break
+        
+        if not model_found:
+            raise Exception("Aucun modèle ou checkpoint trouvé dans les artifacts MLflow")
+        
+        # Sauvegarder le modèle au format PyTorch standard
+        output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Récupérer val_acc depuis les métriques
+        val_acc = float(latest_run.data.metrics.get('val_accuracy', 0.0))
+        
+        # Sauvegarder le checkpoint PyTorch (format compatible avec predictor.py)
+        checkpoint = {
+            'model_state_dict': model.state_dict(),
+            'num_classes': num_classes,
+            'val_acc': val_acc,
+            'epoch': latest_run.data.metrics.get('epoch', 0)
+        }
+        
+        torch.save(checkpoint, output_path)
         print(f"[OK] Modèle sauvegardé vers: {output_path}")
         print(f"     Num classes: {num_classes}")
         print(f"     Val Accuracy: {val_acc:.4f}")
