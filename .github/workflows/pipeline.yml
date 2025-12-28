@@ -245,142 +245,87 @@ jobs:
         docker tag plant-disease-api:${{ github.sha }} plant-disease-api:latest
     
     - name: Deploy to Kubernetes
-      shell: cmd
+      shell: powershell
       run: |
-        @echo off
-        setlocal EnableExtensions
-        REM Toujours se placer dans le workspace (evite les soucis de chemins/redirect)
-        if not defined GITHUB_WORKSPACE (
-          echo [ERREUR] GITHUB_WORKSPACE n'est pas defini
-          exit /b 1
-        )
-        cd /d "%GITHUB_WORKSPACE%"
-        if errorlevel 1 (
-          echo [ERREUR] Impossible de cd dans %GITHUB_WORKSPACE%
-          exit /b 1
-        )
-        where kubectl >nul 2>&1
-        if errorlevel 1 (
-          echo [ERREUR] kubectl n'est pas installé
-          exit /b 1
-        )
+        $ErrorActionPreference = 'Stop'
 
-        REM Fichiers temporaires pour le ConfigMap (definis AVANT le bloc IF pour eviter les soucis d'expansion cmd)
-        REM On ecrit dans le workspace (plus fiable que %TEMP% sur certains runners)
-        if not exist "k8s" mkdir "k8s"
-        set "CM_FILE=k8s\class-mapping-config.generated.yaml"
-        set "CM_ERR=k8s\class-mapping-config.generated.err.txt"
-        
-        echo [INFO] Deploiement des manifests Kubernetes...
+        if (-not $env:GITHUB_WORKSPACE) { Write-Error "[ERREUR] GITHUB_WORKSPACE non défini"; exit 1 }
+        Set-Location $env:GITHUB_WORKSPACE
+
+        # Dossiers temp
+        if (-not (Test-Path k8s)) { New-Item -ItemType Directory -Path k8s | Out-Null }
+        $CM_FILE = "k8s/class-mapping-config.generated.yaml"
+        $CM_ERR  = "k8s/class-mapping-config.generated.err.txt"
+
+        Write-Host "[INFO] Deploiement des manifests Kubernetes..."
         kubectl apply -f k8s/namespace.yaml
-        echo [INFO] namespace apply done
+        Write-Host "[INFO] namespace apply done"
         kubectl apply -f k8s/configmap.yaml
-        echo [INFO] api-config apply done
+        Write-Host "[INFO] api-config apply done"
 
-        REM (Optionnel) PVC non montee dans l'API en mode actuel, donc on ne l'applique pas ici
-        REM kubectl apply -f k8s/pvc.yaml
+        if (-not (Test-Path "data/class_mapping.yaml")) {
+          Write-Error "[ERREUR] data/class_mapping.yaml introuvable"
+          exit 1
+        }
 
-        REM Creer/mettre a jour le ConfigMap class-mapping-config depuis le vrai fichier
-        if exist "data\class_mapping.yaml" (
-          echo [INFO] Creation du ConfigMap class-mapping-config depuis data\class_mapping.yaml
-          echo [INFO] CM_FILE=%CM_FILE%
-          echo [INFO] CWD=%CD%
-          if not exist "k8s" (
-            echo [INFO] Dossier k8s manquant, creation...
-            mkdir "k8s"
-          )
-          dir "k8s" >nul 2>nul
-          REM Sur Windows runners, le pipe peut retourner un code != 0. On passe par un fichier temporaire.
-          if exist "%CM_ERR%" del /q "%CM_ERR%" >nul 2>nul
-          if exist "%CM_FILE%" del /q "%CM_FILE%" >nul 2>nul
+        Write-Host "[INFO] Creation du ConfigMap class-mapping-config depuis data/class_mapping.yaml"
+        Remove-Item $CM_FILE -ErrorAction SilentlyContinue
+        Remove-Item $CM_ERR  -ErrorAction SilentlyContinue
 
-          kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops --dry-run=client -o yaml > "%CM_FILE%" 2> "%CM_ERR%"
-          echo [INFO] kubectl create done
-          if errorlevel 1 (
-            echo [ERREUR] kubectl create configmap a echoue. Stderr:
-            type "%CM_ERR%" 2>nul
-            exit /b 1
-          )
+        kubectl create configmap class-mapping-config `
+          --from-file=class_mapping.yaml=data/class_mapping.yaml `
+          -n plant-disease-mlops --dry-run=client -o yaml `
+          > $CM_FILE 2> $CM_ERR
 
-          if not exist "%CM_FILE%" (
-            echo [ERREUR] Fichier YAML non cree: %CM_FILE%
-            type "%CM_ERR%" 2>nul
-            exit /b 1
-          )
- 
-          for %%A in ("%CM_FILE%") do (
-            echo [INFO] CM_FILE size=%%~zA bytes
-            if %%~zA==0 (
-              echo [ERREUR] YAML ConfigMap vide: %CM_FILE%
-              type "%CM_ERR%" 2>nul
-              exit /b 1
-            )
-          )
+        $size = (Get-Item $CM_FILE).Length
+        Write-Host "[INFO] CM_FILE size=$size bytes"
+        if ($size -eq 0) {
+          Write-Error "[ERREUR] YAML ConfigMap vide"
+          Get-Content $CM_ERR
+          exit 1
+        }
 
-          kubectl apply -f "%CM_FILE%" 2> "%CM_ERR%" || (
-            echo [ERREUR] kubectl apply a echoue. Stderr:
-            type "%CM_ERR%" 2>nul
-            echo [INFO] Debut du YAML genere:
-            more +1 "%CM_FILE%"
-            exit /b 1
-          )
-          echo [INFO] kubectl apply OK
-          cmd /c exit 0
+        try {
+          kubectl apply -f $CM_FILE 2> $CM_ERR
+          Write-Host "[INFO] kubectl apply OK"
+        } catch {
+          Write-Error "[ERREUR] kubectl apply a echoue"
+          Get-Content $CM_ERR
+          Write-Host "[INFO] Debut du YAML genere:"
+          Get-Content $CM_FILE
+          exit 1
+        }
 
-          REM Nettoyer les fichiers generes (ne jamais faire echouer le step)
-          if exist "%CM_ERR%" del /q "%CM_ERR%" >nul 2>nul
-          if exist "%CM_FILE%" del /q "%CM_FILE%" >nul 2>nul
-        ) else (
-          echo [ERREUR] data\class_mapping.yaml introuvable (necessaire pour class-mapping-config)
-          exit /b 1
-        )
+        # Nettoyage fichiers temp (non bloquant)
+        Remove-Item $CM_FILE,$CM_ERR -ErrorAction SilentlyContinue
 
-        echo [INFO] ConfigMap class-mapping-config OK, suite du deploiement...
+        Write-Host "[INFO] ConfigMap class-mapping-config OK, suite du deploiement..."
 
-        REM Nettoyer les anciens pods (ImagePullBackOff, etc.)
-        echo [INFO] Suppression des anciens pods plant-disease-api (si existants)...
-        kubectl delete pod -l app=plant-disease-api -n plant-disease-mlops --ignore-not-found=true || (
-          echo [WARN] kubectl delete pod a retourne une erreur (ignoree)
-        )
-        echo [INFO] kubectl delete pod OK
+        Write-Host "[INFO] Suppression des anciens pods plant-disease-api (si existants)..."
+        try {
+          kubectl delete pod -l app=plant-disease-api -n plant-disease-mlops --ignore-not-found=true
+          Write-Host "[INFO] kubectl delete pod OK"
+        } catch {
+          Write-Host "[WARN] kubectl delete pod a retourne une erreur (ignoree)"
+        }
 
         kubectl apply -f k8s/api-deployment.yaml
-        if errorlevel 1 (
-          echo [ERREUR] kubectl apply deployment a echoue
-          kubectl describe deployment/plant-disease-api -n plant-disease-mlops
-          exit /b 1
-        )
-        echo [INFO] kubectl apply deployment OK
+        Write-Host "[INFO] kubectl apply deployment OK"
 
         kubectl apply -f k8s/api-service.yaml
-        if errorlevel 1 (
-          echo [ERREUR] kubectl apply service a echoue
-          kubectl describe service/api-service -n plant-disease-mlops
-          exit /b 1
-        )
-        echo [INFO] kubectl apply service OK
+        Write-Host "[INFO] kubectl apply service OK"
         
-        echo [INFO] Mise a jour de l'image du deployment...
-        kubectl set image deployment/plant-disease-api api=plant-disease-api:latest -n plant-disease-mlops || echo Deployment non trouvé, création en cours...
-        if errorlevel 1 (
-          echo [ERREUR] kubectl set image a echoue
-          exit /b 1
-        )
-        echo [INFO] kubectl set image OK
+        Write-Host "[INFO] Mise a jour de l'image du deployment..."
+        try {
+          kubectl set image deployment/plant-disease-api api=plant-disease-api:latest -n plant-disease-mlops
+          Write-Host "[INFO] kubectl set image OK"
+        } catch {
+          Write-Host "[WARN] kubectl set image a echoue ou Deployment non trouvé, creation en cours..."
+        }
         
-        echo [INFO] Attente du rollout...
+        Write-Host "[INFO] Attente du rollout..."
         kubectl rollout status deployment/plant-disease-api -n plant-disease-mlops --timeout=300s
-        if errorlevel 1 (
-          echo [ERREUR] Rollout failed / timeout. Diagnostic:
-          kubectl get pods -n plant-disease-mlops
-          kubectl describe deployment/plant-disease-api -n plant-disease-mlops
-          echo [INFO] Logs (last 200 lines):
-          kubectl logs deployment/plant-disease-api -n plant-disease-mlops --tail=200 --all-containers=true
-          exit /b 1
-        )
-        
-        echo [OK] Déploiement terminé
-        echo [INFO] Status des pods:
+
+        Write-Host "[OK] Déploiement terminé"
+        Write-Host "[INFO] Status des pods:"
         kubectl get pods -n plant-disease-mlops
-        echo [INFO] Deploy step completed successfully
-        endlocal & exit /b 0
