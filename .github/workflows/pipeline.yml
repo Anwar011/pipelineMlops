@@ -273,7 +273,9 @@ jobs:
         
         echo [INFO] Deploiement des manifests Kubernetes...
         kubectl apply -f k8s/namespace.yaml
+        echo [INFO] namespace apply done
         kubectl apply -f k8s/configmap.yaml
+        echo [INFO] api-config apply done
 
         REM (Optionnel) PVC non montee dans l'API en mode actuel, donc on ne l'applique pas ici
         REM kubectl apply -f k8s/pvc.yaml
@@ -382,4 +384,5 @@ jobs:
         echo [OK] Déploiement terminé
         echo [INFO] Status des pods:
         kubectl get pods -n plant-disease-mlops
+        echo [INFO] Deploy step completed without error
         exit /b 0

@@ -1,3 +1,6 @@
+# Ignore generated temp files used during CI
+k8s/class-mapping-config.generated.yaml
+k8s/class-mapping-config.generated.err.txt
 # Python
 __pycache__/
 *.py[cod]
