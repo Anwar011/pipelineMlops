@@ -248,19 +248,19 @@ jobs:
       shell: cmd
       run: |
         @echo off
-        setlocal EnableExtensions EnableDelayedExpansion
+        setlocal EnableExtensions
         REM Toujours se placer dans le workspace (evite les soucis de chemins/redirect)
         if not defined GITHUB_WORKSPACE (
           echo [ERREUR] GITHUB_WORKSPACE n'est pas defini
           exit /b 1
         )
         cd /d "%GITHUB_WORKSPACE%"
-        if %ERRORLEVEL% NEQ 0 (
+        if errorlevel 1 (
           echo [ERREUR] Impossible de cd dans %GITHUB_WORKSPACE%
           exit /b 1
         )
         where kubectl >nul 2>&1
-        if %ERRORLEVEL% NEQ 0 (
+        if errorlevel 1 (
           echo [ERREUR] kubectl n'est pas installé
           exit /b 1
         )
@@ -293,8 +293,8 @@ jobs:
           if exist "%CM_FILE%" del /q "%CM_FILE%" >nul 2>nul
 
           kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops --dry-run=client -o yaml > "%CM_FILE%" 2> "%CM_ERR%"
-          echo [INFO] kubectl create exit=%ERRORLEVEL%
-          if %ERRORLEVEL% NEQ 0 (
+          echo [INFO] kubectl create done
+          if errorlevel 1 (
             echo [ERREUR] kubectl create configmap a echoue. Stderr:
             type "%CM_ERR%" 2>nul
             exit /b 1
@@ -307,16 +307,16 @@ jobs:
           )
 
           for %%A in ("%CM_FILE%") do set "CM_SIZE=%%~zA"
-          echo [INFO] CM_FILE size=!CM_SIZE! bytes
-          if "!CM_SIZE!"=="0" (
+          echo [INFO] CM_FILE size=%CM_SIZE% bytes
+          if "%CM_SIZE%"=="0" (
             echo [ERREUR] YAML ConfigMap vide: %CM_FILE%
             type "%CM_ERR%" 2>nul
             exit /b 1
           )
 
           kubectl apply -f "%CM_FILE%" 2> "%CM_ERR%"
-          echo [INFO] kubectl apply exit=%ERRORLEVEL%
-          if %ERRORLEVEL% NEQ 0 (
+          echo [INFO] kubectl apply done
+          if errorlevel 1 (
             echo [ERREUR] kubectl apply a echoue. Stderr:
             type "%CM_ERR%" 2>nul
             echo [INFO] Debut du YAML genere:
@@ -344,7 +344,7 @@ jobs:
         
         echo [INFO] Attente du rollout...
         kubectl rollout status deployment/plant-disease-api -n plant-disease-mlops --timeout=300s
-        if %ERRORLEVEL% NEQ 0 (
+        if errorlevel 1 (
           echo [ERREUR] Rollout failed / timeout. Diagnostic:
           kubectl get pods -n plant-disease-mlops
           kubectl describe deployment/plant-disease-api -n plant-disease-mlops
