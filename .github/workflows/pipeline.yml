@@ -383,4 +383,4 @@ jobs:
         echo [INFO] Status des pods:
         kubectl get pods -n plant-disease-mlops
         echo [INFO] Deploy step completed successfully
-        cmd /c exit 0
+        endlocal & exit /b 0
