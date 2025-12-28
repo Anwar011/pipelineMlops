@@ -245,87 +245,55 @@ jobs:
         docker tag plant-disease-api:${{ github.sha }} plant-disease-api:latest
     
     - name: Deploy to Kubernetes
-      shell: powershell
+      shell: cmd
       run: |
-        $ErrorActionPreference = 'Stop'
+        @echo off
+        setlocal EnableExtensions
+        if not defined GITHUB_WORKSPACE (
+          echo [ERREUR] GITHUB_WORKSPACE non defini
+          exit /b 1
+        )
+        cd /d "%GITHUB_WORKSPACE%" || exit /b 1
+        if not exist k8s mkdir k8s
+        set "DEPLOY_PS=%GITHUB_WORKSPACE%\k8s\deploy_tmp.ps1"
 
-        if (-not $env:GITHUB_WORKSPACE) { Write-Error "[ERREUR] GITHUB_WORKSPACE non défini"; exit 1 }
-        Set-Location $env:GITHUB_WORKSPACE
+        >"%DEPLOY_PS%" echo $ErrorActionPreference = 'Stop'
+        >>"%DEPLOY_PS%" echo Set-Location "%GITHUB_WORKSPACE%"
+        >>"%DEPLOY_PS%" echo if (-not (Test-Path "data/class_mapping.yaml")) { Write-Error "data/class_mapping.yaml introuvable"; exit 1 }
+        >>"%DEPLOY_PS%" echo if (-not (Test-Path "k8s")) { New-Item -ItemType Directory -Path "k8s" ^| Out-Null }
+        >>"%DEPLOY_PS%" echo $cmFile = "k8s/class-mapping-config.generated.yaml"
+        >>"%DEPLOY_PS%" echo $cmErr  = "k8s/class-mapping-config.generated.err.txt"
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] Deploiement des manifests Kubernetes..."
+        >>"%DEPLOY_PS%" echo kubectl apply -f k8s/namespace.yaml
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] namespace apply done"
+        >>"%DEPLOY_PS%" echo kubectl apply -f k8s/configmap.yaml
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] api-config apply done"
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] Creation du ConfigMap class-mapping-config depuis data/class_mapping.yaml"
+        >>"%DEPLOY_PS%" echo Remove-Item $cmFile -ErrorAction SilentlyContinue
+        >>"%DEPLOY_PS%" echo Remove-Item $cmErr  -ErrorAction SilentlyContinue
+        >>"%DEPLOY_PS%" echo kubectl create configmap class-mapping-config --from-file=class_mapping.yaml=data/class_mapping.yaml -n plant-disease-mlops --dry-run=client -o yaml ^> $cmFile 2^> $cmErr
+        >>"%DEPLOY_PS%" echo $size = (Get-Item $cmFile).Length
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] CM_FILE size=$size bytes"
+        >>"%DEPLOY_PS%" echo if ($size -eq 0) { Write-Error "YAML ConfigMap vide"; Get-Content $cmErr; exit 1 }
+        >>"%DEPLOY_PS%" echo try { kubectl apply -f $cmFile 2^> $cmErr; Write-Host "[INFO] kubectl apply OK" } catch { Write-Error "[ERREUR] kubectl apply a echoue"; Get-Content $cmErr; Write-Host "[INFO] Debut du YAML genere:"; Get-Content $cmFile; exit 1 }
+        >>"%DEPLOY_PS%" echo Remove-Item $cmFile,$cmErr -ErrorAction SilentlyContinue
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] ConfigMap class-mapping-config OK, suite du deploiement..."
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] Suppression des anciens pods plant-disease-api (si existants)..."
+        >>"%DEPLOY_PS%" echo try { kubectl delete pod -l app=plant-disease-api -n plant-disease-mlops --ignore-not-found=true ^| Out-Null; Write-Host "[INFO] kubectl delete pod OK" } catch { Write-Host "[WARN] kubectl delete pod a retourne une erreur (ignoree)" }
+        >>"%DEPLOY_PS%" echo kubectl apply -f k8s/api-deployment.yaml
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] kubectl apply deployment OK"
+        >>"%DEPLOY_PS%" echo kubectl apply -f k8s/api-service.yaml
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] kubectl apply service OK"
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] Mise a jour de l'image du deployment..."
+        >>"%DEPLOY_PS%" echo try { kubectl set image deployment/plant-disease-api api=plant-disease-api:latest -n plant-disease-mlops ^| Out-Null; Write-Host "[INFO] kubectl set image OK" } catch { Write-Host "[WARN] kubectl set image a echoue ou Deployment non trouve, creation en cours..." }
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] Attente du rollout..."
+        >>"%DEPLOY_PS%" echo kubectl rollout status deployment/plant-disease-api -n plant-disease-mlops --timeout=300s
+        >>"%DEPLOY_PS%" echo Write-Host "[OK] Deploiement termine"
+        >>"%DEPLOY_PS%" echo Write-Host "[INFO] Status des pods:"
+        >>"%DEPLOY_PS%" echo kubectl get pods -n plant-disease-mlops
 
-        # Dossiers temp
-        if (-not (Test-Path k8s)) { New-Item -ItemType Directory -Path k8s | Out-Null }
-        $CM_FILE = "k8s/class-mapping-config.generated.yaml"
-        $CM_ERR  = "k8s/class-mapping-config.generated.err.txt"
-
-        Write-Host "[INFO] Deploiement des manifests Kubernetes..."
-        kubectl apply -f k8s/namespace.yaml
-        Write-Host "[INFO] namespace apply done"
-        kubectl apply -f k8s/configmap.yaml
-        Write-Host "[INFO] api-config apply done"
-
-        if (-not (Test-Path "data/class_mapping.yaml")) {
-          Write-Error "[ERREUR] data/class_mapping.yaml introuvable"
-          exit 1
-        }
-
-        Write-Host "[INFO] Creation du ConfigMap class-mapping-config depuis data/class_mapping.yaml"
-        Remove-Item $CM_FILE -ErrorAction SilentlyContinue
-        Remove-Item $CM_ERR  -ErrorAction SilentlyContinue
-
-        kubectl create configmap class-mapping-config `
-          --from-file=class_mapping.yaml=data/class_mapping.yaml `
-          -n plant-disease-mlops --dry-run=client -o yaml `
-          > $CM_FILE 2> $CM_ERR
-
-        $size = (Get-Item $CM_FILE).Length
-        Write-Host "[INFO] CM_FILE size=$size bytes"
-        if ($size -eq 0) {
-          Write-Error "[ERREUR] YAML ConfigMap vide"
-          Get-Content $CM_ERR
-          exit 1
-        }
-
-        try {
-          kubectl apply -f $CM_FILE 2> $CM_ERR
-          Write-Host "[INFO] kubectl apply OK"
-        } catch {
-          Write-Error "[ERREUR] kubectl apply a echoue"
-          Get-Content $CM_ERR
-          Write-Host "[INFO] Debut du YAML genere:"
-          Get-Content $CM_FILE
-          exit 1
-        }
-
-        # Nettoyage fichiers temp (non bloquant)
-        Remove-Item $CM_FILE,$CM_ERR -ErrorAction SilentlyContinue
-
-        Write-Host "[INFO] ConfigMap class-mapping-config OK, suite du deploiement..."
-
-        Write-Host "[INFO] Suppression des anciens pods plant-disease-api (si existants)..."
-        try {
-          kubectl delete pod -l app=plant-disease-api -n plant-disease-mlops --ignore-not-found=true
-          Write-Host "[INFO] kubectl delete pod OK"
-        } catch {
-          Write-Host "[WARN] kubectl delete pod a retourne une erreur (ignoree)"
-        }
-
-        kubectl apply -f k8s/api-deployment.yaml
-        Write-Host "[INFO] kubectl apply deployment OK"
-
-        kubectl apply -f k8s/api-service.yaml
-        Write-Host "[INFO] kubectl apply service OK"
-        
-        Write-Host "[INFO] Mise a jour de l'image du deployment..."
-        try {
-          kubectl set image deployment/plant-disease-api api=plant-disease-api:latest -n plant-disease-mlops
-          Write-Host "[INFO] kubectl set image OK"
-        } catch {
-          Write-Host "[WARN] kubectl set image a echoue ou Deployment non trouvé, creation en cours..."
-        }
-        
-        Write-Host "[INFO] Attente du rollout..."
-        kubectl rollout status deployment/plant-disease-api -n plant-disease-mlops --timeout=300s
-
-        Write-Host "[OK] Déploiement terminé"
-        Write-Host "[INFO] Status des pods:"
-        kubectl get pods -n plant-disease-mlops
+        powershell -NoProfile -ExecutionPolicy Bypass -File "%DEPLOY_PS%"
+        set "LASTERR=%ERRORLEVEL%"
+        if exist "%DEPLOY_PS%" del /q "%DEPLOY_PS%"
+        if %LASTERR% NEQ 0 exit /b %LASTERR%
+        echo [INFO] Deploy step completed successfully
